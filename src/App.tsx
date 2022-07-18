@@ -11,8 +11,9 @@
  *
  */
 import "./styles.css";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import axios from "axios";
+import Child from "./Child";
 
 type Location = any;
 enum SortingDirection {
@@ -56,6 +57,8 @@ const flattenLocations = (locations: Location[]) => {
 const getFilteredRows = (rows: Location[], searchKey: string) => {
   if (!searchKey || searchKey.length < 3) return rows;
 
+  console.log(`filtered rows. current length is ... ${rows.length}`);
+
   return rows.filter((row: any) =>
     Object.values(row).some((s) => String(s).toLowerCase().includes(searchKey))
   );
@@ -67,7 +70,26 @@ export default function App() {
     key: "",
     direction: SortingDirection.UNSORTED
   });
-  const [searchValue, setSearchValue] = useState("");
+  const [childData, setChildData] = useState(0);
+  const [childToParentData, setChildToParentData] = useState("");
+  /**
+   * Storing userInput and filtered rows as a state and userInput.
+   * Previously: Saved the userInput in a State hook, and re-rendering filteredRows on every character input. T
+   * While it is a cool user interation, this is an expensive feature especially as the # of locations increase.
+   *
+   * Now: No re-render on search interactions. One useRef hook, and saving filtered rows in a separate state.
+   *
+   */
+  const userInput = useRef("");
+  const [filteredRows, setFilteredRows] = useState([]);
+
+  const parentToChild = () => {
+    setChildData(childData + 1);
+  };
+
+  const childToParent = (message) => {
+    setChildToParentData(message);
+  };
 
   const sortColumn = (sortByKey: string) => {
     // flatLocations is a list of location objects.
@@ -102,14 +124,25 @@ export default function App() {
   };
 
   const onSearchValueChange = (value: string) => {
-    setSearchValue(value);
+    userInput.current = value;
+  };
+
+  const onClickSearch = () => {
+    if (!userInput.current) {
+      setFilteredRows(getFilteredRows(flatLocations, "") as never[]);
+    }
+    setFilteredRows(
+      getFilteredRows(flatLocations, userInput.current) as never[]
+    );
   };
 
   useEffect(() => {
     fetchData().then((peopleList) => {
+      console.log("re-rendering");
       setFlatLocations(
         flattenLocations(peopleList.map(({ location }) => location))
       );
+      setFilteredRows(flatLocations);
     });
   }, []);
 
@@ -117,14 +150,26 @@ export default function App() {
     <div className="App">
       <h1>Hello CodeSandbox</h1>
       <h2>Start editing to see some magic happen!</h2>
-      <label>Search</label>
-      <input
-        placeholder="search something"
-        value={searchValue}
-        onChange={(e) => {
-          onSearchValueChange(e.target.value);
-        }}
-      />
+      <div>
+        <p>
+          This is the message from the child:{" "}
+          {childToParentData || "...no message yet..."}
+        </p>
+        <Child parentToChild={childData} childToParent={childToParent} />
+      </div>
+      <div>
+        <button onClick={() => parentToChild()}>Click parent</button>
+        <button onClick={() => onClickSearch()}>Search</button>
+      </div>
+      <div>
+        <label>Search</label>
+        <input
+          placeholder="search something"
+          onChange={(e) => {
+            onSearchValueChange(e.target.value);
+          }}
+        />
+      </div>
       <table>
         <thead>
           <tr>
@@ -143,17 +188,15 @@ export default function App() {
           </tr>
         </thead>
         <tbody>
-          {getFilteredRows(flatLocations, searchValue).map(
-            (location, locationIdx) => {
-              return (
-                <tr key={locationIdx}>
-                  {Object.keys(location).map((header, headerIdx) => (
-                    <td key={headerIdx}>{location[header]}</td>
-                  ))}
-                </tr>
-              );
-            }
-          )}
+          {filteredRows.map((location, locationIdx) => {
+            return (
+              <tr key={locationIdx}>
+                {Object.keys(location).map((header, headerIdx) => (
+                  <td key={headerIdx}>{location[header]}</td>
+                ))}
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
